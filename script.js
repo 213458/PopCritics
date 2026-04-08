@@ -1,28 +1,5 @@
-// ============= ELEMENTOS DO DOM =============
-const authSection = document.getElementById('authSection');
-const mainApp = document.getElementById('mainApp');
-
-const loginForm = document.getElementById('loginForm');
-const registerForm = document.getElementById('registerForm');
-const switchToRegister = document.getElementById('switchToRegister');
-const switchToLogin = document.getElementById('switchToLogin');
-
-const reviewForm = document.getElementById('reviewForm');
-const commentInput = document.getElementById('comment');
-const imageInput = document.getElementById('image');
-const captionInput = document.getElementById('caption');
-const ratingInput = document.getElementById('rating');
-const ratingStars = document.getElementById('ratingStars');
-const postsContainer = document.getElementById('postsContainer');
-
-const currentUserName = document.getElementById('currentUserName');
-const logoutButton = document.getElementById('logoutButton');
-
-// ============= CHAVES DE ARMAZENAMENTO =============
-const USERS_KEY = 'popcritics_users';
-const POSTS_KEY = 'popcritics_posts';
-const VOTES_KEY = 'popcritics_votes';
-const CURRENT_USER_KEY = 'popcritics_current_user';
+// ============= CONFIGURAÇÃO SUPABASE =============
+// (Será carregado do config.js)
 
 // ============= VARIÁVEIS GLOBAIS =============
 let posts = [];
@@ -30,79 +7,115 @@ let votes = {};
 let currentUser = null;
 
 // ============= FUNÇÕES DE USUÁRIO =============
-function loadUsers() {
-  const saved = localStorage.getItem(USERS_KEY);
-  return saved ? JSON.parse(saved) : [];
+async function loadUsers() {
+  try {
+    const { data, error } = await supabase
+      .from('users')
+      .select('*');
+
+    if (error) throw error;
+    return data || [];
+  } catch (error) {
+    console.error('Erro ao carregar usuários:', error);
+    return [];
+  }
 }
 
-function saveUsers(users) {
-  localStorage.setItem(USERS_KEY, JSON.stringify(users));
+async function saveUsers(users) {
+  // Não precisamos salvar usuários manualmente - Supabase cuida disso
+  return true;
 }
 
 function getCurrentUser() {
-  const saved = localStorage.getItem(CURRENT_USER_KEY);
+  const saved = localStorage.getItem('popcritics_current_user');
   return saved ? JSON.parse(saved) : null;
 }
 
 function setCurrentUser(user) {
   if (user) {
-    localStorage.setItem(CURRENT_USER_KEY, JSON.stringify(user));
+    localStorage.setItem('popcritics_current_user', JSON.stringify(user));
   } else {
-    localStorage.removeItem(CURRENT_USER_KEY);
+    localStorage.removeItem('popcritics_current_user');
   }
   currentUser = user;
 }
 
-function registerUser(name, email, password) {
-  const users = loadUsers();
-  
-  // Verificar se email já existe
-  if (users.some(u => u.email === email)) {
-    alert('Este email já está cadastrado!');
+async function registerUser(name, email, password) {
+  try {
+    // Verificar se email já existe
+    const { data: existingUsers, error: checkError } = await supabase
+      .from('users')
+      .select('email')
+      .eq('email', email.toLowerCase());
+
+    if (checkError) throw checkError;
+
+    if (existingUsers && existingUsers.length > 0) {
+      alert('Este email já está cadastrado!');
+      return false;
+    }
+
+    // Validações
+    if (!name.trim()) {
+      alert('Por favor, informe seu nome.');
+      return false;
+    }
+
+    if (name.length > 50) {
+      alert('O nome deve ter no máximo 50 caracteres.');
+      return false;
+    }
+
+    if (password.length < 6) {
+      alert('A senha deve ter pelo menos 6 caracteres.');
+      return false;
+    }
+
+    // Criar novo usuário
+    const newUser = {
+      id: Date.now().toString(),
+      name: name.trim(),
+      email: email.toLowerCase(),
+      password: password, // Em produção, fazer hash!
+      created_at: new Date().toISOString()
+    };
+
+    const { data, error } = await supabase
+      .from('users')
+      .insert([newUser])
+      .select();
+
+    if (error) throw error;
+
+    return data[0];
+  } catch (error) {
+    console.error('Erro ao registrar usuário:', error);
+    alert('Erro ao criar conta. Tente novamente.');
     return false;
   }
-
-  // Validações
-  if (!name.trim()) {
-    alert('Por favor, informe seu nome.');
-    return false;
-  }
-
-  if (name.length > 50) {
-    alert('O nome deve ter no máximo 50 caracteres.');
-    return false;
-  }
-
-  if (password.length < 6) {
-    alert('A senha deve ter pelo menos 6 caracteres.');
-    return false;
-  }
-
-  // Criar novo usuário
-  const newUser = {
-    id: Date.now().toString(),
-    name: name.trim(),
-    email: email.toLowerCase(),
-    password: password, // Em produção, fazer hash!
-    createdAt: Date.now()
-  };
-
-  users.push(newUser);
-  saveUsers(users);
-  
-  return newUser;
 }
 
-function loginUser(email, password) {
-  const users = loadUsers();
-  const user = users.find(u => u.email === email.toLowerCase() && u.password === password);
-  
-  if (!user) {
-    alert('Email ou senha incorretos.');
+async function loginUser(email, password) {
+  try {
+    const { data, error } = await supabase
+      .from('users')
+      .select('*')
+      .eq('email', email.toLowerCase())
+      .eq('password', password);
+
+    if (error) throw error;
+
+    if (!data || data.length === 0) {
+      alert('Email ou senha incorretos.');
+      return null;
+    }
+
+    return data[0];
+  } catch (error) {
+    console.error('Erro ao fazer login:', error);
+    alert('Erro ao fazer login. Tente novamente.');
     return null;
   }
-
-  return user;
 }
 
 function logout() {
@@ -115,22 +128,69 @@ function logout() {
 }
 
 // ============= FUNÇÕES DE POSTS =============
-function loadPosts() {
-  const saved = localStorage.getItem(POSTS_KEY);
-  return saved ? JSON.parse(saved) : [];
+async function loadPosts() {
+  try {
+    const { data, error } = await supabase
+      .from('posts')
+      .select(`
+        *,
+        users!inner(name)
+      `)
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+
+    // Transformar dados para manter compatibilidade
+    return data.map(post => ({
+      id: post.id,
+      userId: post.user_id,
+      author: post.users.name, // Para compatibilidade
+      comment: post.comment,
+      caption: post.caption,
+      rating: post.rating,
+      imageData: post.image_data,
+      likes: post.likes,
+      dislikes: post.dislikes,
+      createdAt: new Date(post.created_at).getTime()
+    })) || [];
+  } catch (error) {
+    console.error('Erro ao carregar posts:', error);
+    return [];
+  }
 }
 
-function savePosts() {
-  localStorage.setItem(POSTS_KEY, JSON.stringify(posts));
+async function savePosts() {
+  // Não precisamos salvar posts manualmente - Supabase cuida disso
+  return true;
 }
 
-function loadVotes() {
-  const saved = localStorage.getItem(VOTES_KEY);
-  return saved ? JSON.parse(saved) : {};
+async function loadVotes() {
+  if (!currentUser) return {};
+
+  try {
+    const { data, error } = await supabase
+      .from('votes')
+      .select('*')
+      .eq('user_id', currentUser.id);
+
+    if (error) throw error;
+
+    // Transformar para o formato esperado
+    const votesObj = {};
+    data.forEach(vote => {
+      votesObj[`${vote.user_id}_${vote.post_id}`] = vote.vote_type;
+    });
+
+    return votesObj;
+  } catch (error) {
+    console.error('Erro ao carregar votos:', error);
+    return {};
+  }
 }
 
-function saveVotes() {
-  localStorage.setItem(VOTES_KEY, JSON.stringify(votes));
+async function saveVotes() {
+  // Não precisamos salvar votos manualmente - Supabase cuida disso
+  return true;
 }
 
 // ============= FUNÇÕES DE UI =============
@@ -143,7 +203,17 @@ function showMainApp() {
   authSection.classList.add('hidden');
   mainApp.classList.remove('hidden');
   currentUserName.textContent = `Olá, ${currentUser.name}!`;
-  renderPosts(); // Re-renderizar posts com o novo usuário
+  // Carregar dados do Supabase
+  loadPosts().then(loadedPosts => {
+    posts = loadedPosts;
+    return loadVotes();
+  }).then(loadedVotes => {
+    votes = loadedVotes;
+    renderPosts();
+  }).catch(error => {
+    console.error('Erro ao carregar dados:', error);
+    renderPosts(); // Renderizar mesmo com erro
+  });
 }
 
 function toggleForms() {
@@ -169,11 +239,6 @@ function createPostElement(post) {
   const card = document.createElement('article');
   card.className = 'post-card';
   
-  // Encontrar o autor pelo userId
-  const users = loadUsers();
-  const authorUser = users.find(u => u.id === post.userId);
-  const authorName = authorUser ? authorUser.name : 'Usuário desconhecido';
-  
   const isCurrentUserPost = post.userId === currentUser.id;
   
   // Verificar o voto atual do usuário para este post
@@ -186,7 +251,7 @@ function createPostElement(post) {
   card.innerHTML = `
     <div class="post-header">
       <div>
-        <div class="post-meta"><strong>${escapeHtml(authorName)}</strong> · Postado em ${new Date(post.createdAt).toLocaleString('pt-BR')}</div>
+        <div class="post-meta"><strong>${escapeHtml(post.author)}</strong> · Postado em ${new Date(post.createdAt).toLocaleString('pt-BR')}</div>
       </div>
       <div class="post-rating">${formatStars(post.rating)} (${post.rating}/5)</div>
     </div>
@@ -237,7 +302,7 @@ function updateStars(value) {
 }
 
 // ============= EVENT LISTENERS - AUTENTICAÇÃO =============
-loginForm.addEventListener('submit', event => {
+loginForm.addEventListener('submit', async event => {
   event.preventDefault();
   
   const email = document.getElementById('loginEmail').value.trim();
@@ -248,16 +313,15 @@ loginForm.addEventListener('submit', event => {
     return;
   }
 
-  const user = loginUser(email, password);
+  const user = await loginUser(email, password);
   if (user) {
     setCurrentUser(user);
-    votes = loadVotes(); // Carregar votos para este usuário
     showMainApp();
     loginForm.reset();
   }
 });
 
-registerForm.addEventListener('submit', event => {
+registerForm.addEventListener('submit', async event => {
   event.preventDefault();
   
   const name = document.getElementById('registerName').value.trim();
@@ -270,11 +334,10 @@ registerForm.addEventListener('submit', event => {
     return;
   }
 
-  const user = registerUser(name, email, password);
+  const user = await registerUser(name, email, password);
   if (user) {
     alert('Conta criada com sucesso! Agora você pode fazer login.');
     setCurrentUser(user);
-    votes = loadVotes(); // Carregar votos para este novo usuário
     showMainApp();
     registerForm.reset();
   }
@@ -297,7 +360,7 @@ logoutButton.addEventListener('click', () => {
 });
 
 // ============= EVENT LISTENERS - FORMULÁRIO DE POSTS =============
-reviewForm.addEventListener('submit', event => {
+reviewForm.addEventListener('submit', async event => {
   event.preventDefault();
 
   const comment = commentInput.value.trim();
@@ -327,30 +390,46 @@ reviewForm.addEventListener('submit', event => {
 
   const newPost = {
     id: Date.now().toString(),
-    userId: currentUser.id,
+    user_id: currentUser.id,
     comment,
     caption,
     rating,
-    imageData: null,
+    image_data: null,
     likes: 0,
     dislikes: 0,
-    createdAt: Date.now(),
+    created_at: new Date().toISOString()
   };
 
   function saveAndReset() {
-    posts.push(newPost);
-    savePosts();
-    renderPosts();
-    reviewForm.reset();
-    updateStars(0);
-    imageInput.value = '';
-    ratingInput.value = '0';
+    // Salvar no Supabase
+    supabase.from('posts').insert([newPost]).then(({ error }) => {
+      if (error) {
+        console.error('Erro ao salvar post:', error);
+        alert('Erro ao publicar avaliação. Tente novamente.');
+        return;
+      }
+
+      // Adicionar à lista local e renderizar
+      posts.unshift({
+        ...newPost,
+        userId: newPost.user_id,
+        author: currentUser.name,
+        createdAt: new Date(newPost.created_at).getTime(),
+        imageData: newPost.image_data
+      });
+
+      renderPosts();
+      reviewForm.reset();
+      updateStars(0);
+      imageInput.value = '';
+      ratingInput.value = '0';
+    });
   }
 
   if (file) {
     const reader = new FileReader();
     reader.onload = () => {
-      newPost.imageData = reader.result;
+      newPost.image_data = reader.result;
       saveAndReset();
     };
     reader.readAsDataURL(file);
@@ -368,7 +447,7 @@ ratingStars.addEventListener('click', event => {
 });
 
 // ============= EVENT LISTENERS - POSTS =============
-postsContainer.addEventListener('click', event => {
+postsContainer.addEventListener('click', async event => {
   const button = event.target.closest('button.action-button');
   if (!button) return;
 
@@ -380,30 +459,70 @@ postsContainer.addEventListener('click', event => {
   // Criar chave única para cada usuário e post
   const voteKey = `${currentUser.id}_${postId}`;
   const currentVote = votes[voteKey];
-  
-  if (action === 'like') {
-    if (currentVote === 'like') {
-      votes[voteKey] = null;
-      posts[postIndex].likes -= 1;
-    } else {
-      if (currentVote === 'dislike') {
-        posts[postIndex].dislikes -= 1;
-      }
-      votes[voteKey] = 'like';
-      posts[postIndex].likes += 1;
-    }
-  }
 
-  if (action === 'dislike') {
-    if (currentVote === 'dislike') {
+  if (action === 'like' || action === 'dislike') {
+    const newVote = action;
+    let likeChange = 0;
+    let dislikeChange = 0;
+
+    if (currentVote === newVote) {
+      // Remover voto
+      if (newVote === 'like') likeChange = -1;
+      else dislikeChange = -1;
       votes[voteKey] = null;
-      posts[postIndex].dislikes -= 1;
     } else {
-      if (currentVote === 'like') {
-        posts[postIndex].likes -= 1;
+      // Trocar ou adicionar voto
+      if (currentVote === 'like') likeChange = -1;
+      else if (currentVote === 'dislike') dislikeChange = -1;
+
+      if (newVote === 'like') likeChange = 1;
+      else dislikeChange = 1;
+
+      votes[voteKey] = newVote;
+    }
+
+    // Atualizar contadores locais
+    posts[postIndex].likes += likeChange;
+    posts[postIndex].dislikes += dislikeChange;
+
+    // Atualizar no Supabase
+    try {
+      // Atualizar contadores do post
+      await supabase
+        .from('posts')
+        .update({
+          likes: posts[postIndex].likes,
+          dislikes: posts[postIndex].dislikes
+        })
+        .eq('id', postId);
+
+      // Gerenciar voto na tabela votes
+      if (votes[voteKey]) {
+        // Inserir ou atualizar voto
+        await supabase
+          .from('votes')
+          .upsert({
+            id: voteKey,
+            user_id: currentUser.id,
+            post_id: postId,
+            vote_type: votes[voteKey]
+          });
+      } else {
+        // Remover voto
+        await supabase
+          .from('votes')
+          .delete()
+          .eq('id', voteKey);
       }
-      votes[voteKey] = 'dislike';
-      posts[postIndex].dislikes += 1;
+
+      renderPosts();
+    } catch (error) {
+      console.error('Erro ao atualizar voto:', error);
+      alert('Erro ao registrar voto. Tente novamente.');
+      // Reverter mudanças locais
+      posts[postIndex].likes -= likeChange;
+      posts[postIndex].dislikes -= dislikeChange;
+      votes[voteKey] = currentVote;
     }
   }
 
@@ -413,34 +532,50 @@ postsContainer.addEventListener('click', event => {
       alert('Você só pode apagar suas próprias publicações!');
       return;
     }
-    
+
     if (confirm('Tem certeza que deseja excluir esta avaliação?')) {
-      posts = posts.filter(post => post.id !== postId);
-      delete votes[postId];
-      savePosts();
-      saveVotes();
-      renderPosts();
+      try {
+        // Deletar do Supabase
+        await supabase
+          .from('posts')
+          .delete()
+          .eq('id', postId);
+
+        // Também deletar votos relacionados
+        await supabase
+          .from('votes')
+          .delete()
+          .eq('post_id', postId);
+
+        // Remover da lista local
+        posts = posts.filter(post => post.id !== postId);
+        delete votes[voteKey];
+
+        renderPosts();
+      } catch (error) {
+        console.error('Erro ao deletar post:', error);
+        alert('Erro ao excluir avaliação. Tente novamente.');
+      }
     }
     return;
   }
-
-  if (!votes[voteKey]) {
-    delete votes[voteKey];
-  }
-
-  saveVotes();
-  savePosts();
-  renderPosts();
 });
 
 // ============= INICIALIZAÇÃO =============
-posts = loadPosts();
-votes = loadVotes();
 currentUser = getCurrentUser();
 
 if (currentUser) {
-  showMainApp();
-  renderPosts();
+  // Carregar dados do Supabase se usuário estiver logado
+  loadPosts().then(loadedPosts => {
+    posts = loadedPosts;
+    return loadVotes();
+  }).then(loadedVotes => {
+    votes = loadedVotes;
+    showMainApp();
+  }).catch(error => {
+    console.error('Erro ao carregar dados:', error);
+    showMainApp(); // Mostrar app mesmo com erro
+  });
 } else {
   showAuthSection();
 }
