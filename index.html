@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PopCritics - Avaliações</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <!-- Tela de Login e Registro -->
+  <div id="authSection" class="auth-section">
+    <div class="auth-container">
+      <div class="brand-auth">
+        <h1>PopCritics</h1>
+        <p>Faça avaliações sobre qualquer coisa, poste comentários, imagens e receba likes/deslikes.</p>
+      </div>
+      
+      <!-- Formulário de Login -->
+      <form id="loginForm" class="auth-form">
+        <h2>Entrar</h2>
+        <label for="loginEmail">Email</label>
+        <input type="email" id="loginEmail" placeholder="seu@email.com" required />
+        <label for="loginPassword">Senha</label>
+        <input type="password" id="loginPassword" placeholder="Sua senha" required />
+        <button type="submit" class="auth-button">Entrar</button>
+        <p class="auth-toggle">Ainda não tem conta? <a href="#" id="switchToRegister">Criar conta</a></p>
+      </form>
+      
+      <!-- Formulário de Registro -->
+      <form id="registerForm" class="auth-form hidden">
+        <h2>Criar Conta</h2>
+        <label for="registerName">Nome</label>
+        <input type="text" id="registerName" placeholder="Seu nome" maxlength="50" required />
+        <label for="registerEmail">Email</label>
+        <input type="email" id="registerEmail" placeholder="seu@email.com" required />
+        <label for="registerPassword">Senha</label>
+        <input type="password" id="registerPassword" placeholder="Mínimo 6 caracteres" minlength="6" required />
+        <label for="registerPasswordConfirm">Confirmar Senha</label>
+        <input type="password" id="registerPasswordConfirm" placeholder="Confirme sua senha" minlength="6" required />
+        <button type="submit" class="auth-button">Criar Conta</button>
+        <p class="auth-toggle">Já tem conta? <a href="#" id="switchToLogin">Fazer login</a></p>
+      </form>
+    </div>
+  </div>
+
+  <!-- App Principal -->
+  <div id="mainApp" class="app-shell hidden">
+    <header>
+      <div class="brand">
+        <div class="header-top">
+          <div>
+            <h1>PopCritics</h1>
+            <p>Faça avaliações sobre qualquer coisa, poste comentários, imagens e receba likes/deslikes.</p>
+          </div>
+          <div class="user-info">
+            <span id="currentUserName"></span>
+            <button id="logoutButton" class="logout-button">Sair</button>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <main>
+      <section class="post-form-section">
+        <h2>Nova avaliação</h2>
+        <form id="reviewForm">
+          <label for="comment">Comentário <span class="limit-note">(máx. 500 chars)</span></label>
+          <textarea id="comment" name="comment" maxlength="500" rows="5" placeholder="Escreva sua avaliação..." required></textarea>
+          <div class="field-row">
+            <div>
+              <label for="image">Imagem opcional</label>
+              <input type="file" id="image" accept="image/*" />
+            </div>
+            <div>
+              <label for="caption">Legenda da imagem <span class="limit-note">(máx. 100 chars)</span></label>
+              <input type="text" id="caption" maxlength="100" placeholder="Legenda da imagem" />
+            </div>
+          </div>
+
+          <div class="rating-row">
+            <span>Avaliação em estrelas</span>
+            <div class="rating-stars" id="ratingStars">
+              <button type="button" class="star" data-value="1">☆</button>
+              <button type="button" class="star" data-value="2">☆</button>
+              <button type="button" class="star" data-value="3">☆</button>
+              <button type="button" class="star" data-value="4">☆</button>
+              <button type="button" class="star" data-value="5">☆</button>
+            </div>
+          </div>
+          <input type="hidden" id="rating" name="rating" value="0" required />
+
+          <button type="submit" class="submit-button">Publicar avaliação</button>
+        </form>
+      </section>
+
+      <section class="posts-section">
+        <h2>Avaliações recentes</h2>
+        <div id="postsContainer" class="posts-container"></div>
+      </section>
+    </main>
+  </div>
+
+  <script src="script.js"></script>
+</body>
+</body>
+</html>
